@@ -100,7 +100,7 @@ Using Ellis' pattern (AUTO_SPEED_VALIDATE) is **NOT** a safe movement pattern. P
 [update_manager klipper_auto_speed]
 type: git_repo
 path: ~/klipper_auto_speed
-origin: https://github.com/anonoei/klipper_auto_speed.git
+origin: https://github.com/HonestBrothers/klipper_auto_speed.git
 primary_branch: main
 install_script: install.sh
 managed_services: klipper
@@ -121,7 +121,7 @@ cd klipper_auto_speed
 #### Manual installation
 1.  Clone the repository
     1. `cd ~`
-    2. `git clone https://github.com/Anonoei/klipper_auto_speed.git`
+    2. `git clone https://github.com/HonestBrothers/klipper_auto_speed.git`
     3. `cd klipper_auto_speed`
 2.  Link auto_speed to klipper
     1. `ln -sf ~/klipper_auto_speed/auto_speed.py ~/klipper/klippy/extras/auto_speed.py`

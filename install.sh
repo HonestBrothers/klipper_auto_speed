@@ -42,7 +42,7 @@ echo "Installing matplotlib in klippy..."
 ~/klippy-env/bin/python -m pip install matplotlib
 
 echo "Moving autoacc.cfg to /home/pi/printer_data/config/"
-mv ~/klipper_auto_speed/autoacc.cfg ~/home/pi/printer_data/config/autoacc.cfg
+mv ~/klipper_auto_speed/autoacc.cfg ~/printer_data/config/autoacc.cfg
 
 # Restart klipper
 echo "Restarting Klipper..."

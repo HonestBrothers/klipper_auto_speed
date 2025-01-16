@@ -415,6 +415,12 @@ class AutoSpeed:
             plt.savefig(filepath, bbox_inches='tight')
             plt.close()
 
+            # Append velocs and accels to autoacc.cfg
+            with open("autoacc.cfg", "a") as cfg_file:
+                cfg_file.write("\n# AUTO_SPEED_GRAPH results\n")
+                cfg_file.write(f"# Velocs: {velocs}\n")
+                cfg_file.write(f"# Accels: {accels}\n")
+
     # -------------------------------------------------------
     #
     #     Internal Helpers

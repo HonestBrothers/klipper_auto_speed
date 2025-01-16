@@ -53,7 +53,7 @@ Using Ellis' pattern (AUTO_SPEED_VALIDATE) is **NOT** a safe movement pattern. P
   - `AUTO_SPEED_GRAPH`
 - Graph your printer's max velocity/accel between v100 and v1000, over 9 steps
   - `AUTO_SPEED_GRAPH VELOCITY_MIN=100 VELOCITY_MAX=1000 VELOCITY_DIV=9`
- 
+
 ## Roadmap
  - [ ] Export printer results as a 'benchmark' to a database to see average speeds for different printers
  - [ ] Make _ACCEL/_VELOCITY smarter, based on printer size
@@ -113,7 +113,7 @@ managed_services: klipper
 #### Automatic installation
 ```
 cd ~
-git clone https://github.com/Anonoei/klipper_auto_speed.git
+git clone https://github.com/HonestBrothers/klipper_auto_speed.git
 cd klipper_auto_speed
 ./install.sh
 ```

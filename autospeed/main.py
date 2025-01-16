@@ -404,19 +404,24 @@ class AutoSpeed:
             plt.title(f"Max accel at velocity on {aw.axis} to {int(accel_accu*100)}% accuracy")
             plt.xlabel("Velocity")
             plt.ylabel("Acceleration")
+
+            # Create folder for saving graphs if it doesn't exist
+            graph_folder = os.path.join(self.results_dir, "auto_speed_graphs")
+            os.makedirs(graph_folder, exist_ok=True)
+
             filepath = os.path.join(
-                self.results_dir,
+                graph_folder,
                 f"AUTO_SPEED_GRAPH_{dt.datetime.now():%Y-%m-%d_%H:%M:%S}_{aw.axis}.png"
             )
             self.gcode.respond_info(f"Velocs: {velocs}")
             self.gcode.respond_info(f"Accels: {accels}")
             self.gcode.respond_info(f"AUTO SPEED graph found max accel on {aw.axis} after {perf_counter() - start:.0f}s\nSaving graph to {filepath}")
-            os.makedirs(self.results_dir, exist_ok=True)
             plt.savefig(filepath, bbox_inches='tight')
             plt.close()
 
             # Append velocs and accels to autoacc.cfg
-            with open("autoacc.cfg", "a") as cfg_file:
+            config_path = os.path.expanduser("~/printer_data/config/autoacc.cfg")
+            with open(config_path, "a") as cfg_file:
                 cfg_file.write("\n# AUTO_SPEED_GRAPH results\n")
                 cfg_file.write(f"# Velocs: {velocs}\n")
                 cfg_file.write(f"# Accels: {accels}\n")

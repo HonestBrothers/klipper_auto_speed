@@ -7,6 +7,8 @@
 import os
 from time import perf_counter
 import datetime as dt
+import subprocess
+import sys
 
 from .funcs import calculate_graph, calculate_accel, calculate_velocity
 from .move import Move, MoveX, MoveY, MoveZ, MoveDiagX, MoveDiagY
@@ -347,7 +349,12 @@ class AutoSpeed:
 
     cmd_AUTO_SPEED_GRAPH_help = ("Graph your printer's maximum acceleration at given velocities")
     def cmd_AUTO_SPEED_GRAPH(self, gcmd):
-        import matplotlib.pyplot as plt # this may fail if matplotlib isn't installed
+        try:
+            import matplotlib.pyplot as plt
+        except ImportError:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "matplotlib"])
+            import matplotlib.pyplot as plt
+
         if not len(self.steppers.keys()) == 3:
             #raise gcmd.error(f"Printer must be homed first! Found {len(self.steppers.keys())} homed axes.")
             self._home(True, True, True)
@@ -408,7 +415,7 @@ class AutoSpeed:
             # Create folder for saving graphs if it doesn't exist
             graph_folder = os.path.join(self.results_dir, "auto_speed_graphs")
             os.makedirs(graph_folder, exist_ok=True)
-
+            # Save graph
             filepath = os.path.join(
                 graph_folder,
                 f"AUTO_SPEED_GRAPH_{dt.datetime.now():%Y-%m-%d_%H:%M:%S}_{aw.axis}.png"
@@ -420,11 +427,26 @@ class AutoSpeed:
             plt.close()
 
             # Append velocs and accels to autoacc.cfg
-            config_path = os.path.expanduser("~/printer_data/config/autoacc.cfg")
-            with open(config_path, "a") as cfg_file:
-                cfg_file.write("\n# AUTO_SPEED_GRAPH results\n")
-                cfg_file.write(f"# Velocs: {velocs}\n")
-                cfg_file.write(f"# Accels: {accels}\n")
+            config_dir = os.path.expanduser("~/printer_data/config")
+            os.makedirs(config_dir, exist_ok=True)
+            config_path = os.path.join(config_dir, "autoacc.cfg")
+            with open(config_path, "a", encoding='utf-8') as cfg_file:
+                if aw.axis.upper() == "X":
+                    for veloc, accel in zip(velocs, accels):
+                        cfg_file.write(f"#*# {veloc}, {accel}\n")
+                elif aw.axis.upper() == "Y":
+                    lines = []
+                    with open(config_path, "r") as cfg_file:
+                        lines = cfg_file.readlines()
+                    with open(config_path, "w") as cfg_file:
+                        for i, (line, accel) in enumerate(zip(lines, accels)):
+                            if line.startswith("#*#") and line.strip().endswith(","):
+                                cfg_file.write(line.strip() + f" {accel}\n")
+                            else:
+                                cfg_file.write(line)
+                #else:
+
+
 
     # -------------------------------------------------------
     #

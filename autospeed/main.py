@@ -356,8 +356,8 @@ class AutoSpeed:
             import matplotlib.pyplot as plt
 
         if not len(self.steppers.keys()) == 3:
-            #raise gcmd.error(f"Printer must be homed first! Found {len(self.steppers.keys())} homed axes.")
-            self._home(True, True, True)
+            raise gcmd.error(f"Printer must be homed first! Found {len(self.steppers.keys())} homed axes.")
+            #self._home(True, True, True)
         axes = self._parse_axis(gcmd.get("AXIS", self._axis_to_str(self.axes)))
 
         margin         = gcmd.get_float("MARGIN", self.margin, above=0.0)
@@ -366,7 +366,7 @@ class AutoSpeed:
 
         veloc_min  = gcmd.get_float('VELOCITY_MIN', 200.0, above=0.0)
         veloc_max  = gcmd.get_float('VELOCITY_MAX', 700.0, above=veloc_min)
-        veloc_div  = gcmd.get_int(  'VELOCITY_DIV', 5, minval=0)
+        veloc_div  = gcmd.get_int(  'VELOCITY_DIV', 5, minval=2)
 
         accel_accu = gcmd.get_float('ACCEL_ACCU', 0.05, above=0.0, below=1.0)
 
@@ -415,7 +415,7 @@ class AutoSpeed:
             # Create folder for saving graphs if it doesn't exist
             graph_folder = os.path.join(self.results_dir, "auto_speed_graphs")
             os.makedirs(graph_folder, exist_ok=True)
-            # Save graph
+
             filepath = os.path.join(
                 graph_folder,
                 f"AUTO_SPEED_GRAPH_{dt.datetime.now():%Y-%m-%d_%H:%M:%S}_{aw.axis}.png"
@@ -430,21 +430,33 @@ class AutoSpeed:
             config_dir = os.path.expanduser("~/printer_data/config")
             os.makedirs(config_dir, exist_ok=True)
             config_path = os.path.join(config_dir, "autoacc.cfg")
+            if not os.path.exists(config_path):
+                #expand this for better error handling at some point
+                self.gcode.respond_info("autoacc.cfg not found. Please reinstall")
             with open(config_path, "a", encoding='utf-8') as cfg_file:
-                if aw.axis.upper() == "X":
-                    for veloc, accel in zip(velocs, accels):
-                        cfg_file.write(f"#*# {veloc}, {accel}\n")
-                elif aw.axis.upper() == "Y":
-                    lines = []
-                    with open(config_path, "r") as cfg_file:
+                    with open(config_path, "r", encoding='utf-8') as cfg_file:
                         lines = cfg_file.readlines()
-                    with open(config_path, "w") as cfg_file:
-                        for i, (line, accel) in enumerate(zip(lines, accels)):
-                            if line.startswith("#*#") and line.strip().endswith(","):
-                                cfg_file.write(line.strip() + f" {accel}\n")
-                            else:
-                                cfg_file.write(line)
-                #else:
+
+                    start_id = None
+                    end_id = None
+                    for id, line in enumerate(lines):
+                        if line.strip() == f"#*# Axis: {aw.axis.upper()}":
+                            start_id = id
+                        if line.strip() == f"#*# End of {aw.axis.upper()} values":
+                            end_id = id
+                            break
+
+                    if start_id is not None and end_id is not None:
+                        del lines[start_id:end_id+1]
+
+                    with open(config_path, "w", encoding='utf-8') as cfg_file:
+                        cfg_file.writelines(lines)
+
+                    with open(config_path, "a", encoding='utf-8') as cfg_file:
+                        cfg_file.write(f"#*# Axis: {aw.axis.upper()}\n")
+                        for i in range(len(velocs)):
+                            cfg_file.write(f"#*# {velocs[i]}, {accels[i]}\n")
+                        cfg_file.write(f"#*# End of {aw.axis.upper()} values\n")
 
 
 

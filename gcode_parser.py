@@ -30,20 +30,24 @@ def read_velocity_acceleration_pairs(file_path):
             capture_values = False
             for line in config_file:
                 line = line.strip()
-                if line.startswith("#*# Speed,XAcceleration,YAcceleration"):
+                if line.startswith("#*# Axis: X") or line.startswith("#*# Axis: Y"):
                     capture_values = True
                     use_individual_acceleration = True
-                elif line.startswith("#*# End Values"):
+                elif line.startswith("#*# End of"):
                     capture_values = False
                 elif capture_values:
                     values = line.lstrip("#*#").strip().split(',')
-                    if len(values) == 3:
-                        velocity, acceleration_x, acceleration_y = map(int, values)
-                        velocity_acceleration_pairs.append((velocity, acceleration_x, acceleration_y))
-                    elif len(values) == 2:
+                    if line.startswith("#*# Axis: X"):
+                        velocity, acceleration_x = map(int, values)
+                        velocity_acceleration_pairs.append((velocity, acceleration_x, None))
+                    elif line.startswith("#*# Axis: Y"):
+                        velocity, acceleration_y = map(int, values)
+                        velocity_acceleration_pairs.append((velocity, None, acceleration_y))
+                    else:
                         velocity, acceleration = map(int, values)
                         velocity_acceleration_pairs.append((velocity, acceleration, acceleration))
                         use_individual_acceleration = False
+
     except FileNotFoundError:
         print(f'File not found: {file_path}')
     except Exception as e:
@@ -61,21 +65,41 @@ def process_gcode(input_filename, velocity_acceleration_pairs, factor, use_indiv
                 acceleration_override_x = None
                 acceleration_override_y = None
                 for line in input_file:
-                    match = re.match(r'G1 F(\d+)', line)
+                    match = re.search(r'G1 F(\d+)', line)
                     if match:
                         velocity_mm_per_min = int(match.group(1))
                         velocity_mm_per_sec = velocity_mm_per_min / 60
                         acceleration_x, acceleration_y = interpolate_acceleration(velocity_acceleration_pairs, velocity_mm_per_sec)
-                        if acceleration_x is not None and acceleration_y is not None:
-                            acceleration_x = int(acceleration_x * factor / 100)  # Apply factor
-                            acceleration_y = int(acceleration_y * factor / 100)  # Apply factor
-                            output_file.write(line)
-                            if use_individual_acceleration:
-                                output_file.write(f'SET_KINEMATICS_LIMIT X_ACCEL={acceleration_x} Y_ACCEL={acceleration_y}\n')
+
+                        # Reduce velocity until acceleration_x or acceleration_y is sufficient
+                        while acceleration_x is not None and acceleration_y is not None:
+                            distance_x_mm = re.search(r'X(-?\d+)', line)
+                            distance_y_mm = re.search(r'Y(-?\d+)', line)
+                            if distance_x_mm:
+                                distance_x_mm = float(distance_x_mm.group(1))
+                            if distance_y_mm:
+                                distance_y_mm = float(distance_y_mm.group(1))
+
+                            if (velocity_mm_per_sec ** 2 / distance_x_mm > acceleration_x) or \
+                               (velocity_mm_per_sec ** 2 / distance_y_mm > acceleration_y):
+                                # Find the next lower velocity value from the velocity_acceleration_pairs
+                                for v, a_x, a_y in reversed(velocity_acceleration_pairs):
+                                    if v < velocity_mm_per_sec:
+                                        velocity_mm_per_sec = v
+                                        acceleration_x, acceleration_y = a_x, a_y
+                                        break
                             else:
-                                output_file.write(f'SET_VELOCITY_LIMIT ACCEL={acceleration_y}\n')
+                                break
+
+                        velocity_mm_per_min = int(velocity_mm_per_sec * 60)
+                        #acceleration_x = int(acceleration_x * factor / 100)  # Apply factor
+                        #acceleration_y = int(acceleration_y * factor / 100)  # Apply factor
+
+                        output_file.write(f'G1 X{distance_x_mm} Y{distance_y_mm} F{velocity_mm_per_min}\n')
+                        if use_individual_acceleration:
+                            output_file.write(f'SET_KINEMATICS_LIMIT X_ACCEL={acceleration_x} Y_ACCEL={acceleration_y}\n')
                         else:
-                            output_file.write(line)
+                            output_file.write(f'SET_VELOCITY_LIMIT ACCEL={acceleration_y}\n')
                     elif line.startswith('M201'):
                         match_x = re.search(r'X(\d+)', line)
                         match_y = re.search(r'Y(\d+)', line)

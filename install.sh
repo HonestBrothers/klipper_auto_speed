@@ -41,9 +41,24 @@ done
 echo "Installing matplotlib in klippy..."
 ~/klippy-env/bin/python -m pip install matplotlib
 
-# This needs some error handling to check if the file is in both places
-echo "Moving autoacc.cfg to /home/pi/printer_data/config/"
-mv ~/klipper_auto_speed/autoacc.cfg ~/printer_data/config/autoacc.cfg
+# Check to see if Gcode Shell Command is installed
+cd ~
+if test -f "~/klipper/klippy/extras/gcode_shell_command.py"; then
+    echo "Gcode shell command found!"
+else
+    echo "Installing Gcode shell command..."
+    cp ~/klipper_auto_speed/gcode_shell_command.py ~/klipper/klippy/extras/gcode_shell_command.py
+fi
+
+# Check to see if autoacc.cfg is installed
+cd ~
+if test -f "~/printer_data/config/autoacc.cfg"; then
+    echo "autoacc.cfg found!"
+    echo "If you're intending to reinstall autoacc.cfg, please remove the file from ~/printer_data/config/ and run this script again"
+else
+    echo "Moving autoacc.cfg to /home/pi/printer_data/config/"
+    cp ~/klipper_auto_speed/autoacc.cfg ~/printer_data/config/autoacc.cfg
+fi
 
 # Restart klipper
 echo "Restarting Klipper..."

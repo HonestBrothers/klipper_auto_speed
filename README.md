@@ -1,3 +1,5 @@
+#work in progress
+
 # Klipper Auto Speed
  Klipper module for automatically calculating your printer's maximum acceleration/velocity
 

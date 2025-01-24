@@ -40,7 +40,7 @@ Using Ellis' pattern (AUTO_SPEED_VALIDATE) is **NOT** a safe movement pattern. P
  - [Console Output](https://github.com/Anonoei/klipper_auto_speed#console-output)
 
 ## Overview
- - License: MIT
+ - License: GNU 3.0
 
 ## Example Usage
 - Default usage (find max accel/velocity)

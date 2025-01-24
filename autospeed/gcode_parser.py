@@ -2,12 +2,27 @@ import re
 import sys
 import os
 
-from klipper.klippy.extras.trad_rack import TradRackToolHead
-
 class AutoSpeed:
     def __init__(self, config):
         self.config = config
-        self.min_cruise_ratio = TradRackToolHead(config).minimum_cruise_ratio
+        self.min_cruise_ratio = self.read_min_cruise_ratio()
+
+    def read_min_cruise_ratio(self):
+        min_cruise_ratio = 0.0  # Default value
+        self.printer_cfg_path = "/home/pi/printer_data/config/printer.cfg"
+        try:
+            with open(self.printer_cfg_path, 'r') as config_file:
+                for line in config_file:
+                    match = re.match(r'\s*minimum_cruise_ratio\s*=\s*(\d*\.?\d+)', line)
+                    if match:
+                        min_cruise_ratio = float(match.group(1))
+                        print(f'Minimum cruise ratio: {min_cruise_ratio}')
+                        break
+        except FileNotFoundError:
+            print(f'File not found: {self.config_path}')
+        except Exception as e:
+            print(f'Error reading {self.config_path}: {str(e)}')
+        return min_cruise_ratio
 
     # Trapezoidal acceleration profile - best estimate
     def trapezoidal_motion_time(self, vmax, a, d_total):

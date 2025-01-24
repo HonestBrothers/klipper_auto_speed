@@ -36,6 +36,7 @@ mkdir -p "${KLIPPER_PATH}/klippy/extras/autospeed"
 for file in `ls autospeed/*.py`; do
     ln -sf "${SRCDIR}/${file}" "${KLIPPER_PATH}/klippy/extras/${file}"
 done
+echo "Linked auto speed to Klipper!"
 
 # Install matplotlib
 echo "Installing matplotlib in klippy..."
@@ -46,6 +47,9 @@ cd ~
 if ! test -f "~/klipper/klippy/extras/gcode_shell_command.py"; then
     echo "Installing Gcode shell command..."
     cp ~/klipper_auto_speed/gcode_shell_command.py ~/klipper/klippy/extras/gcode_shell_command.py
+    echo "Installed Gcode shell command!"
+else
+    echo "Gcode shell command already installed!"
 fi
 
 # Check to see if autoacc.cfg is installed
@@ -53,6 +57,9 @@ cd ~
 if ! test -f "~/printer_data/config/autoacc.cfg"; then
     echo "Moving autoacc.cfg to /home/pi/printer_data/config/"
     cp ~/klipper_auto_speed/autoacc.cfg ~/printer_data/config/autoacc.cfg
+    echo "Moved autoacc.cfg to /home/pi/printer_data/config/"
+else
+    echo "autoacc.cfg already installed!"
 fi
 
 # Restart klipper

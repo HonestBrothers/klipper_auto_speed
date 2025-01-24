@@ -2,11 +2,14 @@ import re
 import sys
 import os
 
-class AutoSpeed:
-    def __init__(self):
-        self.min_cruise_ratio = self.config.getfloat("minimum_cruise_ratio", None, below=1.0, minval=0.0)
+from klipper.klippy.extras.trad_rack import TradRackToolHead
 
-    #Trapezoidal acceleration profile - best estimate
+class AutoSpeed:
+    def __init__(self, config):
+        self.config = config
+        self.min_cruise_ratio = TradRackToolHead(config).minimum_cruise_ratio
+
+    # Trapezoidal acceleration profile - best estimate
     def trapezoidal_motion_time(self, vmax, a, d_total):
         # Acceleration phase
         t_acc = vmax / a
@@ -164,6 +167,7 @@ if __name__ == '__main__':
     if len(sys.argv) != 2:
         print('Usage: python gcode_parser.py <input file>')
     else:
+        #clean this section up
         input_filename = sys.argv[1]
         config = {}  # Define config as an empty dictionary or load it from a file if needed
         config_path = "/home/pi/printer_data/config/autoacc.cfg"
@@ -171,16 +175,6 @@ if __name__ == '__main__':
         velocity_acceleration_pairs, use_individual_acceleration = auto_speed.read_velocity_acceleration_pairs(config_path)
 
         if velocity_acceleration_pairs:
-            factor = 100  # Default factor (no reduction)
-            try:
-                with open(config_path, 'r') as config_file:
-                    for line in config_file:
-                        if line.strip().startswith("#*# Factor in %:"):
-                            factor = int(line.split(':')[1])
-                            break
-            except FileNotFoundError:
-                pass
-
-            auto_speed.process_gcode(input_filename, velocity_acceleration_pairs, factor, use_individual_acceleration)
+            auto_speed.process_gcode(input_filename, velocity_acceleration_pairs, use_individual_acceleration)
         else:
             print("Speed-acceleration pairs could not be read from the configuration file.")

@@ -9,9 +9,9 @@ class AutoSpeed:
 
     def read_min_cruise_ratio(self):
         min_cruise_ratio = 0.0  # Default value
-        self.printer_cfg_path = "/home/pi/printer_data/config/printer.cfg"
+        config_file_path = os.path.expanduser("~/printer_data/config/printer.cfg")
         try:
-            with open(self.printer_cfg_path, 'r') as config_file:
+            with open(config_file_path, 'r') as config_file:
                 for line in config_file:
                     match = re.match(r'\s*minimum_cruise_ratio\s*=\s*(\d*\.?\d+)', line)
                     if match:
@@ -19,9 +19,9 @@ class AutoSpeed:
                         print(f'Minimum cruise ratio: {min_cruise_ratio}')
                         break
         except FileNotFoundError:
-            print(f'File not found: {self.config_path}')
+            print(f'File not found: {config_file_path}')
         except Exception as e:
-            print(f'Error reading {self.config_path}: {str(e)}')
+            print(f'Error reading {config_file_path}: {str(e)}')
         return min_cruise_ratio
 
     # Trapezoidal acceleration profile - best estimate
@@ -124,51 +124,46 @@ class AutoSpeed:
                     for line in input_file:
                         match = re.search(r'G1', line)
                         if match:
-                            velocity_mm_per_min = int(re.search(r'F(\d+)', line))
-                            velocity_mm_per_sec = velocity_mm_per_min / 60
+                            velocity_match = re.search(r'F(\d+)', line)
+                            if velocity_match:
+                                velocity_mm_per_min = int(velocity_match.group(1))
+                                velocity_mm_per_sec = velocity_mm_per_min / 60
 
-                            distance_x_match = re.search(r'X(-?\d+)', line)
-                            distance_y_match = re.search(r'Y(-?\d+)', line)
+                                distance_x_match = re.search(r'X(-?\d+)', line)
+                                distance_y_match = re.search(r'Y(-?\d+)', line)
 
-                            distance_x_mm = float(distance_x_match.group(1)) if distance_x_match else None
-                            distance_y_mm = float(distance_y_match.group(1)) if distance_y_match else None
+                                distance_x_mm = float(distance_x_match.group(1)) if distance_x_match else None
+                                distance_y_mm = float(distance_y_match.group(1)) if distance_y_match else None
 
-                            #Call trapezoidal_motion_time to and pick the minimum amount of time to complete the move by reducing the velocity. Consider velocity_mm_per_sec as the maximum velocity. Use the interpolated acceleration values to write a new velocity and acceleration command to the output file
+                                if distance_x_mm is None or distance_y_mm is None:
+                                    output_file.write(line)
+                                    continue
 
-                            # Define range for velocities to test
-                            velocity_range = range(10, int(velocity_mm_per_sec) + 1, 10)  # Example range from 10 to max velocity in steps of 10 mm/s
-                            min_t_total = float('inf')
-                            best_velocity = velocity_mm_per_sec
+                                velocity_range = range(10, int(velocity_mm_per_sec) + 1, 10)
+                                min_t_total = float('inf')
+                                best_velocity = velocity_mm_per_sec
 
-                            for v in velocity_range:
+                                for v in velocity_range:
+                                    acceleration_x, acceleration_y = self.interpolate_acceleration(velocity_acceleration_pairs, v)
+                                    t_total_x = self.trapezoidal_motion_time(v, acceleration_x, distance_x_mm)
+                                    t_total_y = self.trapezoidal_motion_time(v, acceleration_y, distance_y_mm)
+                                    t_total = max(t_total_x, t_total_y)
+                                    if t_total < min_t_total:
+                                        min_t_total = t_total
+                                        best_velocity = v
+
+                                velocity_mm_per_sec = best_velocity
+                                velocity_mm_per_min = int(velocity_mm_per_sec * 60)
+
                                 acceleration_x, acceleration_y = self.interpolate_acceleration(velocity_acceleration_pairs, velocity_mm_per_sec)
-                                t_total_x = self.trapezoidal_motion_time(v, acceleration_x, distance_x_mm)
-                                t_total_y = self.trapezoidal_motion_time(v, acceleration_y, distance_y_mm)
-                                # Pick the slower time to complete the move between the X and Y moves, so one doesn't outrun the other.
-                                t_total = max(t_total_x, t_total_y)
-                                if t_total < min_t_total:
-                                    min_t_total = t_total
-                                    best_velocity = v
 
-                            # Write the new velocity and acceleration command to the output file
-                            velocity_mm_per_sec = best_velocity
-                            velocity_mm_per_min = int(velocity_mm_per_sec * 60)
-
-                            acceleration_x, acceleration_y = self.interpolate_acceleration(velocity_acceleration_pairs, velocity_mm_per_sec)
-
-                            output_file.write(f'G1 F{velocity_mm_per_min}\n')
-                            if use_individual_acceleration:
-                                output_file.write(f'SET_KINEMATICS_LIMIT X_ACCEL={acceleration_x} Y_ACCEL={acceleration_y}\n')
+                                output_file.write(f'G1 F{velocity_mm_per_min}\n')
+                                if use_individual_acceleration:
+                                    output_file.write(f'SET_KINEMATICS_LIMIT X_ACCEL={acceleration_x} Y_ACCEL={acceleration_y}\n')
+                                else:
+                                    output_file.write(f'SET_VELOCITY_LIMIT ACCEL={acceleration_y}\n')
                             else:
-                                output_file.write(f'SET_VELOCITY_LIMIT ACCEL={acceleration_y}\n')
-                        #elif line.startswith('M201'):
-                        #    match_x = re.search(r'X(\d+)', line)
-                        #    match_y = re.search(r'Y(\d+)', line)
-                        #    if match_x:
-                        #        int(match_x.group(1))
-                        #    if match_y:
-                        #        int(match_y.group(1))
-                        #    output_file.write(line)
+                                output_file.write(line)
                         else:
                             output_file.write(line)
 
@@ -182,11 +177,9 @@ if __name__ == '__main__':
     if len(sys.argv) != 2:
         print('Usage: python gcode_parser.py <input file>')
     else:
-        #clean this section up
         input_filename = sys.argv[1]
-        config = {}  # Define config as an empty dictionary or load it from a file if needed
-        config_path = "/home/pi/printer_data/config/autoacc.cfg"
-        auto_speed = AutoSpeed(config)
+        config_path = os.path.expanduser("~/printer_data/config/autoacc.cfg")
+        auto_speed = AutoSpeed(config_path)
         velocity_acceleration_pairs, use_individual_acceleration = auto_speed.read_velocity_acceleration_pairs(config_path)
 
         if velocity_acceleration_pairs:

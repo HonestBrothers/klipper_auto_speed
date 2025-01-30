@@ -76,13 +76,13 @@ Using Ellis' pattern (AUTO_SPEED_VALIDATE) is **NOT** a safe movement pattern. P
 ## How does it work?
  1. Home your printer
  2. If your print is enclosed, heat soak it. You want to run this module in the typical state your printer is in when you're printing.
- 3. Run `AUTO_SPEED`
-    1. Prepare
+ 3. Run `AUTO_SPEED_GRAPH VELOCITY_MIN=100 VELOCITY_MAX=1000 VELOCITY_DIV=10`
+    1. This will run tests between velocity_min and velocity_max, with a test evenly distributed out throughout N number of velocity divisions.
        1. Make sure the printer is level
        2. Check endstop variance
           - Validate the endstops are accurate enough for `MAX_MISSED`
-    2. Find the maximum acceleration
-       - Perform a binary search between `ACCEL_MIN` and `ACCEL_MAX`
+    2. Find the maximum acceleration per the given velocity
+       - Perform a binary search between `VELOCITY_MIN` and `VELOCITY_MAX`
        1. Home, and save stepper start steps
        2. Perform the movement check on the specified axis
        3. Home, and save stepper stop steps
@@ -94,6 +94,7 @@ Using Ellis' pattern (AUTO_SPEED_VALIDATE) is **NOT** a safe movement pattern. P
        3. Home, and save stepper stop steps
        4. If difference between start/stop steps is more than `max_missed`, go to next step
     4. Show results
+    5.
 
 ## Using Klipper Auto Speed
 

@@ -6,24 +6,27 @@ class AutoSpeed:
     def __init__(self, config):
         self.config = config
         self.min_cruise_ratio = self.read_min_cruise_ratio()
+        self.initial_velocity = 0
 
+    # Read the minimum cruise ratio from the configuration file
     def read_min_cruise_ratio(self):
-        min_cruise_ratio = 0.0  # Default value
+        min_cruise_ratio = 0.5  # Default value
         config_file_path = os.path.expanduser("~/printer_data/config/printer.cfg")
         try:
             with open(config_file_path, 'r') as config_file:
                 for line in config_file:
-                    match = re.match(r'\s*minimum_cruise_ratio\s*=\s*(\d*\.?\d+)', line)
+                    match = re.match(r'\s*minimum_cruise_ratio\s*:\s*(\d*\.?\d+)', line)
                     if match:
                         min_cruise_ratio = float(match.group(1))
-                        print(f'Minimum cruise ratio: {min_cruise_ratio}')
                         break
         except FileNotFoundError:
             print(f'File not found: {config_file_path}')
         except Exception as e:
             print(f'Error reading {config_file_path}: {str(e)}')
+        #print(f'Minimum cruise ratio: {min_cruise_ratio}')
         return min_cruise_ratio
 
+    #TODO: Implement trapeziodal motion time calculation for the entire move instead of just reading the coordinates. This also needs to take into account the hypotenuse of the triangle formed by the x and y distances.
     # Trapezoidal acceleration profile - best estimate
     def trapezoidal_motion_time(self, vmax, a, d_total):
         # Acceleration phase
@@ -40,7 +43,7 @@ class AutoSpeed:
         # Constant velocity portion of the phase
         d_ratio = d_const / d_total
 
-        # If the constant velocity portion of the phase is less than the minimum cruise ratio
+        # If the constant velocity portion of the move is less than the minimum cruise ratio
         if d_ratio < self.min_cruise_ratio:
             # If the constant velocity portion of the phase is 0
             if d_ratio == 0:
@@ -81,38 +84,52 @@ class AutoSpeed:
         return acceleration_x, acceleration_y
 
     def read_velocity_acceleration_pairs(self, file_path):
-        velocity_acceleration_pairs = []
+        velocity_acceleration_dict = {}
         use_individual_acceleration = False
 
         try:
             with open(file_path, 'r') as config_file:
                 capture_values = False
+                current_axis = None
                 for line in config_file:
                     line = line.strip()
-                    if line.startswith("#*# Axis: X") or line.startswith("#*# Axis: Y"):
+                    if line.startswith("#*# Axis: X"):
                         capture_values = True
                         use_individual_acceleration = True
+                        current_axis = 'X'
+                    elif line.startswith("#*# Axis: Y"):
+                        capture_values = True
+                        use_individual_acceleration = True
+                        current_axis = 'Y'
                     elif line.startswith("#*# End of"):
                         capture_values = False
+                        current_axis = None
                     elif capture_values:
                         values = line.lstrip("#*#").strip().split(',')
-                        if line.startswith("#*# Axis: X"):
-                            velocity, acceleration_x = map(int, values)
-                            velocity_acceleration_pairs.append((velocity, acceleration_x, None))
-                        elif line.startswith("#*# Axis: Y"):
-                            velocity, acceleration_y = map(int, values)
-                            velocity_acceleration_pairs.append((velocity, None, acceleration_y))
-                        else:
-                            velocity, acceleration = map(int, values)
-                            velocity_acceleration_pairs.append((velocity, acceleration, acceleration))
-                            use_individual_acceleration = False
+                        velocity = int(values[0])
+                        acceleration = int(values[1])
+                        if current_axis == 'X':
+                            if velocity not in velocity_acceleration_dict:
+                                velocity_acceleration_dict[velocity] = [acceleration, None]
+                            else:
+                                velocity_acceleration_dict[velocity][0] = acceleration
+                        elif current_axis == 'Y':
+                            if velocity not in velocity_acceleration_dict:
+                                velocity_acceleration_dict[velocity] = [None, acceleration]
+                            else:
+                                velocity_acceleration_dict[velocity][1] = acceleration
 
         except FileNotFoundError:
             print(f'File not found: {file_path}')
         except Exception as e:
             print(f'Error: {str(e)}')
 
+        # Convert the dictionary to a list of tuples
+        velocity_acceleration_pairs = [(v, a[0] if a[0] is not None else 0, a[1] if a[1] is not None else 0) for v, a in sorted(velocity_acceleration_dict.items())]
+
         return velocity_acceleration_pairs, use_individual_acceleration
+
+    #def direction_change(self, x1, y1, x2, y2):
 
     def process_gcode(self, input_filename, velocity_acceleration_pairs, use_individual_acceleration):
         try:
@@ -122,22 +139,28 @@ class AutoSpeed:
 
                 with open(output_filename, 'w') as output_file:
                     for line in input_file:
-                        match = re.search(r'G1', line)
-                        if match:
+                        #match = re.match(r'\bG1\b', line)
+                        #if match:
                             velocity_match = re.search(r'F(\d+)', line)
+                            distance_x_match = re.search(r'X(-?\d+)', line)
+                            distance_y_match = re.search(r'Y(-?\d+)', line)
                             if velocity_match:
-                                velocity_mm_per_min = int(velocity_match.group(1))
+                                #save the initial velocity
+                                self.initial_velocity = velocity_mm_per_min = int(velocity_match.group(1))
                                 velocity_mm_per_sec = velocity_mm_per_min / 60
+                                acceleration_x, acceleration_y = self.interpolate_acceleration(velocity_acceleration_pairs, velocity_mm_per_sec)
+                                if acceleration_x is not None and acceleration_y is not None:
+                                    #output_file.write(line)
+                                    if use_individual_acceleration:
+                                        output_file.write(f'SET_KINEMATICS_LIMIT X_ACCEL={acceleration_x} Y_ACCEL={acceleration_y}\n')
+                                    else:
+                                        output_file.write(f'SET_VELOCITY_LIMIT ACCEL={acceleration_y}\n')
+                                #else:
+                                #    output_file.write(line)
 
-                                distance_x_match = re.search(r'X(-?\d+)', line)
-                                distance_y_match = re.search(r'Y(-?\d+)', line)
-
+                            elif distance_x_match or distance_y_match:
                                 distance_x_mm = float(distance_x_match.group(1)) if distance_x_match else None
                                 distance_y_mm = float(distance_y_match.group(1)) if distance_y_match else None
-
-                                if distance_x_mm is None or distance_y_mm is None:
-                                    output_file.write(line)
-                                    continue
 
                                 velocity_range = range(10, int(velocity_mm_per_sec) + 1, 10)
                                 min_t_total = float('inf')
@@ -155,17 +178,19 @@ class AutoSpeed:
                                 velocity_mm_per_sec = best_velocity
                                 velocity_mm_per_min = int(velocity_mm_per_sec * 60)
 
-                                acceleration_x, acceleration_y = self.interpolate_acceleration(velocity_acceleration_pairs, velocity_mm_per_sec)
-
-                                output_file.write(f'G1 F{velocity_mm_per_min}\n')
-                                if use_individual_acceleration:
-                                    output_file.write(f'SET_KINEMATICS_LIMIT X_ACCEL={acceleration_x} Y_ACCEL={acceleration_y}\n')
-                                else:
-                                    output_file.write(f'SET_VELOCITY_LIMIT ACCEL={acceleration_y}\n')
-                            else:
-                                output_file.write(line)
-                        else:
+                                #acceleration_x, acceleration_y = self.interpolate_acceleration(velocity_acceleration_pairs, velocity_mm_per_sec)
+                                if velocity_mm_per_min != self.initial_velocity:
+                                    output_file.write(f'G1 F{velocity_mm_per_min}\n')
+                                    self.initial_velocity = velocity_mm_per_min
+                                    if use_individual_acceleration:
+                                        output_file.write(f'SET_KINEMATICS_LIMIT X_ACCEL={acceleration_x} Y_ACCEL={acceleration_y}\n')
+                                    else:
+                                        output_file.write(f'SET_VELOCITY_LIMIT ACCEL={acceleration_x}\n')
+                                #velocity_mm_per_min = self.initial_velocity
                             output_file.write(line)
+                        #else:
+                        #    output_file.write(line)
+
 
             print(f'The G-code file was successfully created: {output_filename}')
         except FileNotFoundError:
